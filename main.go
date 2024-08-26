@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -75,7 +76,7 @@ func (cfg *config) crawlPage(rawCurrentURL string) {
 		}
 
 		// Get the HTML from the current URL
-		fmt.Printf("Crawling: %s\n", normalizedURL)
+		//fmt.Printf("Crawling: %s\n", normalizedURL)
 		htmlBody, err := getHTML(currentURL.String())
 		if err != nil {
 			fmt.Println("Error fetching URL:", err)
@@ -119,6 +120,23 @@ func getHTML(rawURL string) (string, error) {
 
 	return string(htmlData), nil
 }
+func printReport(pages map[string]int, baseURL string) {
+	fmt.Println("=============================")
+	fmt.Println("REPORT for", baseURL)
+	fmt.Println("=============================")
+
+	// Extract keys from the map and sort them
+	var urls []string
+	for url := range pages {
+		urls = append(urls, url)
+	}
+	sort.Strings(urls)
+
+	// Print the report with sorted URLs
+	for _, url := range urls {
+		fmt.Printf("Found %d internal links to %s\n", pages[url], url)
+	}
+}
 
 func main() {
 	if len(os.Args) != 4 {
@@ -161,8 +179,6 @@ func main() {
 
 	cfg.wg.Wait()
 
-	fmt.Println("\nCrawl results:")
-	for url, count := range cfg.pages {
-		fmt.Printf("%s: %d\n", url, count)
-	}
+	printReport(cfg.pages, baseURL.String())
+
 }
