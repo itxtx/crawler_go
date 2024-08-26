@@ -1,6 +1,8 @@
-package crawlergo_test
+package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestNormalizeURL(t *testing.T) {
 	tests := []struct {
@@ -13,7 +15,26 @@ func TestNormalizeURL(t *testing.T) {
 			inputURL: "https://blog.boot.dev/path",
 			expected: "blog.boot.dev/path",
 		},
-		// add more test cases here
+		{
+			name:     "remove www subdomain",
+			inputURL: "http://www.example.com",
+			expected: "example.com",
+		},
+		{
+			name:     "remove trailing slash",
+			inputURL: "http://example.com/",
+			expected: "example.com",
+		},
+		{
+			name:     "normalize path",
+			inputURL: "http://example.com/path/",
+			expected: "example.com/path",
+		},
+		{
+			name:     "keep query parameters",
+			inputURL: "https://example.com/path?query=123",
+			expected: "example.com/path?query=123",
+		},
 	}
 
 	for i, tc := range tests {
