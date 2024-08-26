@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -16,12 +17,16 @@ type config struct {
 	mu                 *sync.Mutex
 	concurrencyControl chan struct{}
 	wg                 *sync.WaitGroup
-	maxPage            int
+	maxPages           int
 }
 
 func (cfg *config) addPageVisit(normalizedURL string) bool {
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
+
+	if len(cfg.pages) >= cfg.maxPages {
+		return false
+	}
 
 	if _, exists := cfg.pages[normalizedURL]; exists {
 		cfg.pages[normalizedURL]++
@@ -33,6 +38,13 @@ func (cfg *config) addPageVisit(normalizedURL string) bool {
 }
 
 func (cfg *config) crawlPage(rawCurrentURL string) {
+	cfg.mu.Lock()
+	if len(cfg.pages) >= cfg.maxPages {
+		cfg.mu.Unlock()
+		return
+	}
+	cfg.mu.Unlock()
+
 	cfg.wg.Add(1)
 	go func() {
 		defer cfg.wg.Done()
@@ -57,7 +69,7 @@ func (cfg *config) crawlPage(rawCurrentURL string) {
 			return
 		}
 
-		// Check if we've already crawled this page
+		// Check if we've already crawled this page or reached the max pages
 		if !cfg.addPageVisit(normalizedURL) {
 			return
 		}
@@ -109,8 +121,8 @@ func getHTML(rawURL string) (string, error) {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Println("Usage: go run main.go <base_url>")
+	if len(os.Args) != 4 {
+		fmt.Println("Usage: ./crawler <base_url> <max_concurrency> <max_pages>")
 		os.Exit(1)
 	}
 
@@ -120,15 +132,29 @@ func main() {
 		os.Exit(1)
 	}
 
+	maxConcurrency, err := strconv.Atoi(os.Args[2])
+	if err != nil || maxConcurrency < 1 {
+		fmt.Println("Invalid max_concurrency. Must be a positive integer.")
+		os.Exit(1)
+	}
+
+	maxPages, err := strconv.Atoi(os.Args[3])
+	if err != nil || maxPages < 1 {
+		fmt.Println("Invalid max_pages. Must be a positive integer.")
+		os.Exit(1)
+	}
+
 	fmt.Printf("Starting crawl of: %s\n", baseURL)
+	fmt.Printf("Max concurrency: %d\n", maxConcurrency)
+	fmt.Printf("Max pages: %d\n", maxPages)
 
 	cfg := &config{
 		pages:              make(map[string]int),
 		baseURL:            baseURL,
 		mu:                 &sync.Mutex{},
-		concurrencyControl: make(chan struct{}, 25), // Adjust this value to control concurrency
+		concurrencyControl: make(chan struct{}, maxConcurrency),
 		wg:                 &sync.WaitGroup{},
-		maxPage:            100, // Adjust this value to control the maximum number of pages to crawl
+		maxPages:           maxPages,
 	}
 
 	cfg.crawlPage(baseURL.String())
