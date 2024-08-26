@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"sort"
@@ -9,6 +11,102 @@ import (
 	"strings"
 	"sync"
 )
+
+type CrawlerConfig struct {
+	BaseURL        *url.URL
+	MaxConcurrency int
+	MaxPages       int
+	Selectors      []string
+	SelectorType   string
+	OutputFormat   string
+	Filter         string
+}
+
+type LinkInfo struct {
+	URL         string
+	Description string
+}
+
+type config struct {
+	links              []LinkInfo
+	pages              map[string]int
+	baseURL            *url.URL
+	mu                 *sync.Mutex
+	concurrencyControl chan struct{}
+	wg                 *sync.WaitGroup
+	maxPages           int
+	crawlerConfig      *CrawlerConfig
+}
+
+func fetchContent(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("received error status code: %d", resp.StatusCode)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/html") {
+		return "", fmt.Errorf("content is not text/html")
+	}
+
+	htmlData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(htmlData), nil
+}
+
+func parseArgs(args []string) (*CrawlerConfig, error) {
+	if len(args) < 4 {
+		return nil, fmt.Errorf("usage: ./crawler <base_url> <max_concurrency> <max_pages> [selectors] [selector_type] [output_format] [filter]")
+	}
+
+	baseURL, err := url.Parse(args[1])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing base URL: %v", err)
+	}
+
+	maxConcurrency, err := strconv.Atoi(args[2])
+	if err != nil || maxConcurrency < 1 {
+		return nil, fmt.Errorf("invalid max_concurrency. Must be a positive integer")
+	}
+
+	maxPages, err := strconv.Atoi(args[3])
+	if err != nil || maxPages < 1 {
+		return nil, fmt.Errorf("invalid max_pages. Must be a positive integer")
+	}
+
+	config := &CrawlerConfig{
+		BaseURL:        baseURL,
+		MaxConcurrency: maxConcurrency,
+		MaxPages:       maxPages,
+		Selectors:      nil,
+		SelectorType:   "css",  // default
+		OutputFormat:   "text", // default
+		Filter:         "",     // no filter by default
+	}
+
+	for i := 4; i < len(args); i++ {
+		switch {
+		case strings.Contains(args[i], "selectors="):
+			config.Selectors = strings.Split(strings.TrimPrefix(args[i], "selectors="), ",")
+		case strings.Contains(args[i], "selector_type="):
+			config.SelectorType = strings.TrimPrefix(args[i], "selector_type=")
+		case strings.Contains(args[i], "output_format="):
+			config.OutputFormat = strings.TrimPrefix(args[i], "output_format=")
+		case strings.Contains(args[i], "filter="):
+			config.Filter = strings.TrimPrefix(args[i], "filter=")
+		}
+	}
+
+	return config, nil
+}
 
 func printReport(pages map[string]int, baseURL string) {
 	fmt.Println("=============================")
@@ -28,80 +126,53 @@ func printReport(pages map[string]int, baseURL string) {
 	}
 }
 
+func (cfg *config) addLink(link LinkInfo) bool {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+
+	if len(cfg.links) >= cfg.maxPages {
+		return false
+	}
+
+	cfg.links = append(cfg.links, link)
+	return true
+}
+
 func main() {
-	// Ensure there are at least 4 arguments (program name + 3 required args)
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: ./crawler <base_url> <max_concurrency> <max_pages> [selectors] [selector_type] [output_format] [filter]")
-		os.Exit(1)
-	}
-
-	// Parse required arguments
-	baseURL, err := url.Parse(os.Args[1])
+	configArgs, err := parseArgs(os.Args)
 	if err != nil {
-		fmt.Println("Error parsing base URL:", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	maxConcurrency, err := strconv.Atoi(os.Args[2])
-	if err != nil || maxConcurrency < 1 {
-		fmt.Println("Invalid max_concurrency. Must be a positive integer.")
-		os.Exit(1)
-	}
-
-	maxPages, err := strconv.Atoi(os.Args[3])
-	if err != nil || maxPages < 1 {
-		fmt.Println("Invalid max_pages. Must be a positive integer.")
-		os.Exit(1)
-	}
-
-	// Parse optional arguments with default values
-	var selectors []string
-	selectorType := "css" // default selector type
-	format := "text"      // default output format
-	filter := ""          // default no filter
-
-	if len(os.Args) > 4 { // e.g., "h1", "p", "a"
-		selectors = strings.Split(os.Args[4], ",")
-	}
-	if len(os.Args) > 5 { //e.g., "css", "xpath", "regex"
-		selectorType = os.Args[5]
-	}
-	if len(os.Args) > 6 { // e.g., "json", "csv", "text"
-		format = os.Args[6]
-	}
-	if len(os.Args) > 7 { // e.g., "Blog Post"
-		filter = os.Args[7]
-	}
-
-	fmt.Printf("Starting crawl of: %s\n", baseURL)
-	fmt.Printf("Max concurrency: %d\n", maxConcurrency)
-	fmt.Printf("Max pages: %d\n", maxPages)
-	fmt.Printf("Selectors: %v\n", selectors)
-	fmt.Printf("Selector Type: %s\n", selectorType)
-	fmt.Printf("Output Format: %s\n", format)
-	fmt.Printf("Filter: %s\n", filter)
+	fmt.Printf("Starting crawl of: %s\n", configArgs.BaseURL)
+	fmt.Printf("Max concurrency: %d\n", configArgs.MaxConcurrency)
+	fmt.Printf("Max pages: %d\n", configArgs.MaxPages)
+	fmt.Printf("Selectors: %v\n", configArgs.Selectors)
+	fmt.Printf("Selector Type: %s\n", configArgs.SelectorType)
+	fmt.Printf("Output Format: %s\n", configArgs.OutputFormat)
+	fmt.Printf("Filter: %s\n", configArgs.Filter)
 
 	cfg := &config{
+		links:              make([]LinkInfo, 0, configArgs.MaxPages),
 		pages:              make(map[string]int),
-		baseURL:            baseURL,
+		baseURL:            configArgs.BaseURL,
 		mu:                 &sync.Mutex{},
-		concurrencyControl: make(chan struct{}, maxConcurrency),
+		concurrencyControl: make(chan struct{}, configArgs.MaxConcurrency),
 		wg:                 &sync.WaitGroup{},
-		maxPages:           maxPages,
+		maxPages:           configArgs.MaxPages,
+		crawlerConfig:      configArgs,
 	}
 
 	// Start crawling with filtering if a filter is provided
-	cfg.crawlPage(baseURL.String(), filter)
+	cfg.crawlPage(configArgs.BaseURL.String(), configArgs.Filter)
 
 	cfg.wg.Wait()
 
-	// Example of extracting content with optional selectors and type
-	if len(selectors) > 0 {
-		// Assuming htmlBody is retrieved within the crawling process
-		htmlBody := "" // replace with actual HTML body content
-		extractMultipleContents(htmlBody, selectors, selectorType, format, true)
-		extractContent(htmlBody, strings.Join(selectors, ","), selectorType, format, true)
+	fmt.Println("\nCrawl results:")
+	for _, link := range cfg.links {
+		fmt.Printf("URL: %s\nDescription: %s\n\n", link.URL, link.Description)
 	}
 
-	printReport(cfg.pages, baseURL.String())
+	printReport(cfg.pages, configArgs.BaseURL.String())
 }

@@ -4,12 +4,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/antchfx/htmlquery"
 	"github.com/antchfx/xpath"
+	"golang.org/x/net/html"
 )
 
 func formatOutput(matches []string, format string) string {
@@ -75,4 +77,49 @@ func extractMultipleContents(htmlContent string, patterns []string, selectorType
 	for _, pattern := range patterns {
 		extractContent(htmlContent, pattern, selectorType, format, printContent)
 	}
+}
+
+func extractLinksAndDescriptions(htmlBody string, baseURL *url.URL, filter string) ([]LinkInfo, error) {
+	doc, err := html.Parse(strings.NewReader(htmlBody))
+	if err != nil {
+		return nil, err
+	}
+
+	var links []LinkInfo
+	var extractFunc func(*html.Node)
+	extractFunc = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			var href, text string
+			for _, attr := range n.Attr {
+				if attr.Key == "href" {
+					href = attr.Val
+					break
+				}
+			}
+			if href != "" {
+				absoluteURL := baseURL.ResolveReference(&url.URL{Path: href}).String()
+				if filter == "" || strings.Contains(absoluteURL, filter) {
+					text = extractText(n)
+					links = append(links, LinkInfo{URL: absoluteURL, Description: text})
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			extractFunc(c)
+		}
+	}
+	extractFunc(doc)
+	return links, nil
+}
+
+func extractText(n *html.Node) string {
+	var text string
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.TextNode {
+			text += c.Data
+		} else if c.Type == html.ElementNode {
+			text += extractText(c)
+		}
+	}
+	return strings.TrimSpace(text)
 }
