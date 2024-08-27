@@ -43,67 +43,81 @@ type job struct {
 	filter string
 }
 
-func (cfg *Config) CrawlWorker(jobs <-chan job, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (cfg *Config) CrawlWorker(jobs <-chan job, results chan<- []job) {
 	for j := range jobs {
-		cfg.ProcessURL(j.url, j.filter)
+		newJobs := cfg.ProcessURL(j.url, j.filter)
+		results <- newJobs
 	}
 }
 
 func (cfg *Config) CrawlWithWorkerPool(initialURL, filter string) {
 	jobs := make(chan job, cfg.CrawlerConfig.MaxConcurrency)
-	var wg sync.WaitGroup
+	results := make(chan []job, cfg.CrawlerConfig.MaxConcurrency)
 
 	// Start worker pool
 	for i := 0; i < cfg.CrawlerConfig.MaxConcurrency; i++ {
-		wg.Add(1)
-		go cfg.CrawlWorker(jobs, &wg)
+		go cfg.CrawlWorker(jobs, results)
 	}
 
 	// Add initial job
 	jobs <- job{url: initialURL, filter: filter}
 
-	// Close jobs channel when all work is done
-	go func() {
-		wg.Wait()
-		close(jobs)
-	}()
+	activeJobs := 1
+	processedURLs := make(map[string]bool)
 
-	// Wait for all jobs to complete
-	wg.Wait()
+	for activeJobs > 0 {
+		select {
+		case newJobs := <-results:
+			activeJobs--
+			for _, j := range newJobs {
+				if !processedURLs[j.url] {
+					jobs <- j
+					activeJobs++
+					processedURLs[j.url] = true
+				}
+			}
+		}
+
+		if activeJobs == 0 {
+			close(jobs)
+		}
+	}
+
+	close(results)
+	fmt.Println("All jobs processed.")
 }
 
-func (cfg *Config) ProcessURL(rawCurrentURL, filter string) {
+func (cfg *Config) ProcessURL(rawCurrentURL, filter string) []job {
 	cfg.Mu.Lock()
 	if len(cfg.Pages) >= cfg.MaxPages {
 		cfg.Mu.Unlock()
-		return
+		return []job{} // Return an empty slice instead of nil
 	}
 	cfg.Mu.Unlock()
 
 	currentURL, err := url.Parse(rawCurrentURL)
 	if err != nil {
 		fmt.Println("Error parsing current URL:", err)
-		return
+		return []job{} // Return an empty slice
 	}
 
 	htmlBody, err := fetchContent(currentURL.String())
 	if err != nil {
 		fmt.Println("Error fetching URL:", err)
-		return
+		return []job{} // Return an empty slice
 	}
 
 	links, err := extractor.ExtractLinksAndDescriptions(htmlBody, currentURL, filter)
 	if err != nil {
 		fmt.Println("Error extracting links:", err)
-		return
+		return []job{} // Return an empty slice
 	}
 
 	for _, link := range links {
 		if cfg.AddLink(link) {
 			fmt.Printf("Found matching link: %s\n", link.URL)
 		} else {
-			return
+			return []job{} // Return an empty slice if we've reached the max pages
 		}
 	}
 
@@ -115,10 +129,12 @@ func (cfg *Config) ProcessURL(rawCurrentURL, filter string) {
 	urls, err := getURLsFromHTML(htmlBody, currentURL.String())
 	if err != nil {
 		fmt.Println("Error extracting URLs:", err)
-		return
+		return []job{} // Return an empty slice
 	}
 
+	var newJobs []job
 	for _, u := range urls {
-		cfg.CrawlWithWorkerPool(u, filter)
+		newJobs = append(newJobs, job{url: u, filter: filter})
 	}
+	return newJobs
 }
