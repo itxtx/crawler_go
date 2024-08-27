@@ -1,6 +1,5 @@
-package main
+package extractor
 
-// import statements
 import (
 	"encoding/json"
 	"fmt"
@@ -14,6 +13,11 @@ import (
 	"golang.org/x/net/html"
 )
 
+type LinkInfo struct {
+	URL         string
+	Description string
+}
+
 func formatOutput(matches []string, format string) string {
 	switch format {
 	case "json":
@@ -26,7 +30,7 @@ func formatOutput(matches []string, format string) string {
 	}
 }
 
-func extractContent(htmlContent, pattern, selectorType, format string, printContent bool) {
+func ExtractContent(htmlContent, pattern, selectorType, format string, printContent bool) {
 	var matches []string
 	switch selectorType {
 	case "css":
@@ -73,13 +77,13 @@ func extractContent(htmlContent, pattern, selectorType, format string, printCont
 	}
 }
 
-func extractMultipleContents(htmlContent string, patterns []string, selectorType string, format string, printContent bool) {
+func ExtractMultipleContents(htmlContent string, patterns []string, selectorType string, format string, printContent bool) {
 	for _, pattern := range patterns {
-		extractContent(htmlContent, pattern, selectorType, format, printContent)
+		ExtractContent(htmlContent, pattern, selectorType, format, printContent)
 	}
 }
 
-func extractLinksAndDescriptions(htmlBody string, baseURL *url.URL, filter string) ([]LinkInfo, error) {
+func ExtractLinksAndDescriptions(htmlBody string, baseURL *url.URL, filter string) ([]LinkInfo, error) {
 	doc, err := html.Parse(strings.NewReader(htmlBody))
 	if err != nil {
 		return nil, err
