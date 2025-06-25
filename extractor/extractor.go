@@ -285,7 +285,7 @@ func extractDirectVideoURLs(htmlContent string, base *url.URL, videoMap map[stri
 			LogExtractionDebug("Skipping potentially encoded/obfuscated URL: %s", match)
 			continue
 		}
-		
+
 		absURL := normalizeURL(match, base)
 		if absURL != "" {
 			if _, exists := videoMap[absURL]; !exists {
@@ -563,7 +563,7 @@ func extractVideoTitle(element *goquery.Selection, doc *goquery.Document) string
 		}
 		return ""
 	}
-	
+
 	// Try title attribute first
 	if title, exists := element.Attr("title"); exists && title != "" {
 		return title
@@ -603,7 +603,7 @@ func extractVideoThumbnail(element *goquery.Selection, doc *goquery.Document, ba
 	if element == nil {
 		return ""
 	}
-	
+
 	// Try poster attribute (for video tags)
 	if poster, exists := element.Attr("poster"); exists {
 		return normalizeURL(poster, base)
@@ -691,7 +691,7 @@ func extractTitleFromURL(rawURL string) string {
 // isVideoURL checks if a URL points to a video file or video platform
 func isVideoURL(rawURL string) bool {
 	lowerURL := strings.ToLower(rawURL)
-	
+
 	// Check for video file extensions
 	videoExtensions := []string{".mp4", ".webm", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".m4v"}
 	for _, ext := range videoExtensions {
@@ -699,7 +699,7 @@ func isVideoURL(rawURL string) bool {
 			return true
 		}
 	}
-	
+
 	// Check for video platforms
 	videoHosts := []string{"youtube.com", "youtu.be", "vimeo.com", "dailymotion.com", "twitch.tv", "facebook.com/watch", "instagram.com/p", "tiktok.com"}
 	for _, host := range videoHosts {
@@ -707,7 +707,7 @@ func isVideoURL(rawURL string) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -727,7 +727,7 @@ func isLikelyEncodedOrObfuscated(rawURL string) bool {
 			return true
 		}
 	}
-	
+
 	// Check for extremely long path segments (potential obfuscation)
 	if parsed, err := url.Parse(rawURL); err == nil {
 		pathSegments := strings.Split(parsed.Path, "/")
@@ -737,16 +737,16 @@ func isLikelyEncodedOrObfuscated(rawURL string) bool {
 			}
 		}
 	}
-	
+
 	// Check for data URIs
 	if strings.HasPrefix(rawURL, "data:") {
 		return true
 	}
-	
+
 	// Check for blob URLs
 	if strings.HasPrefix(rawURL, "blob:") {
 		return true
 	}
-	
+
 	return false
 }

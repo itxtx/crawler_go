@@ -1,0 +1,228 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: "1.23"
+  CHROME_MIN_VERSION: "118"
+
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    # Chrome installation and caching for Ubuntu
+    - name: Install Chrome on Ubuntu
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # Add Google's signing key
+        wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        # Add Chrome repository
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
+        # Update package list
+        sudo apt-get update
+        # Install Chrome
+        sudo apt-get install -y google-chrome-stable
+        # Verify installation
+        google-chrome --version
+        echo "CHROME_PATH=/usr/bin/google-chrome" >> $GITHUB_ENV
+
+    # Chrome installation for macOS (Chrome comes pre-installed on GitHub Actions macOS runners)
+    - name: Setup Chrome on macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        # Verify Chrome installation on macOS
+        if [ -f "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
+          echo "Chrome found at: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version
+          echo "CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" >> $GITHUB_ENV
+        else
+          echo "Chrome not found, installing via Homebrew..."
+          brew install --cask google-chrome
+          echo "CHROME_PATH=/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" >> $GITHUB_ENV
+        fi
+
+    # Cache Chrome binary for faster subsequent runs
+    - name: Cache Chrome
+      uses: actions/cache@v4
+      with:
+        path: |
+          /usr/bin/google-chrome*
+          /opt/google/chrome*
+        key: ${{ runner.os }}-chrome-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-chrome-
+
+    - name: Verify Chrome installation
+      run: |
+        if [ -n "$CHROME_PATH" ] && [ -f "$CHROME_PATH" ]; then
+          echo "✓ Chrome found at: $CHROME_PATH"
+          "$CHROME_PATH" --version
+          
+          # Extract version number and check minimum version
+          CHROME_VERSION=$("$CHROME_PATH" --version | grep -oE '[0-9]+' | head -1)
+          echo "✓ Chrome version: $CHROME_VERSION"
+          
+          if [ "$CHROME_VERSION" -ge "$CHROME_MIN_VERSION" ]; then
+            echo "✓ Chrome version meets minimum requirement ($CHROME_MIN_VERSION)"
+          else
+            echo "❌ Chrome version $CHROME_VERSION is below minimum requirement ($CHROME_MIN_VERSION)"
+            exit 1
+          fi
+        else
+          echo "❌ Chrome not found or CHROME_PATH not set"
+          echo "Available Chrome binaries:"
+          find /usr/bin /opt /Applications -name "*chrome*" -o -name "*Chrome*" 2>/dev/null || echo "None found"
+          exit 1
+        fi
+
+    - name: Download Go dependencies
+      run: go mod download
+
+    - name: Run go vet
+      run: go vet ./...
+
+    - name: Run go fmt check
+      run: |
+        if [ -n "$(gofmt -l .)" ]; then
+          echo "Code is not formatted. Please run 'go fmt ./...' and commit the changes."
+          gofmt -l .
+          exit 1
+        fi
+
+    # Run tests without Chrome first (short mode)
+    - name: Run short tests (no Chrome required)
+      run: |
+        echo "Running tests in short mode (skipping JavaScript tests)..."
+        go test -v -short ./... -timeout 30s
+
+    # Run all tests including Chrome-dependent JS tests
+    - name: Run full tests with Chrome
+      run: |
+        echo "Running all tests including JavaScript tests..."
+        echo "Using Chrome at: $CHROME_PATH"
+        export CHROME_PATH="$CHROME_PATH"
+        go test -v ./... -timeout 60s
+
+    # Baseline JavaScript engine tests
+    - name: Baseline JavaScript engine tests
+      run: |
+        echo "Running JavaScript engine baseline tests..."
+        mkdir -p test-artifacts
+        export CHROME_PATH="$CHROME_PATH"
+        
+        # Run JS engine tests with detailed output
+        go test ./... -run TestJSEngine -v -timeout=30s 2>&1 | tee test-artifacts/jsengine-baseline-ci-$(date +%Y%m%d-%H%M%S).log
+        
+        # Test for flakiness with multiple runs
+        echo "Testing for flakiness..."
+        for i in {1..5}; do 
+          echo "=== CI Run $i ==="; 
+          go test ./... -run TestJSEngine -v -timeout=30s >/dev/null 2>&1 && echo "PASS" || echo "FAIL"; 
+        done | tee test-artifacts/jsengine-flakiness-ci.log
+        
+        # Run with memory profiling
+        go test github.com/itxtx/crawler_go/tests -run TestJSEngine -v -memprofile=test-artifacts/jsengine-mem-ci.prof -timeout=30s
+        
+        echo "✓ JavaScript engine baseline testing completed"
+
+    - name: Upload test artifacts
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: jsengine-test-artifacts-${{ matrix.os }}
+        path: test-artifacts/
+        retention-days: 30
+
+    # Test Makefile targets
+    - name: Test Makefile targets
+      run: |
+        echo "Testing Makefile targets..."
+        make verify-chrome
+        make test-short
+        make test-js
+        echo "✓ All Makefile targets work correctly"
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v4
+      with:
+        version: latest
+        args: --timeout=10m
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test build with Makefile
+      run: make build

@@ -19,6 +19,9 @@ type CrawlerConfig struct {
 	ExtractVideos  bool
 	VideoFormat    string // text|json|csv
 	VideoPlatform  string // optional filter youtube,vimeo,...
+	EnableJS       bool   // Enable JavaScript evaluation for dynamic content
+	JSTimeout      int    // JavaScript evaluation timeout in seconds
+	HumanBehavior  bool   // Simulate human behavior (mouse movements, scrolling)
 }
 
 func ParseArgs(args []string) (*CrawlerConfig, error) {
@@ -52,6 +55,9 @@ func ParseArgs(args []string) (*CrawlerConfig, error) {
 		ExtractVideos:  false,  // default
 		VideoFormat:    "text", // default
 		VideoPlatform:  "",     // default
+		EnableJS:       false,  // default
+		JSTimeout:      30,     // default 30 seconds
+		HumanBehavior:  false,  // default
 	}
 
 	for i := 4; i < len(args); i++ {
@@ -72,6 +78,18 @@ func ParseArgs(args []string) (*CrawlerConfig, error) {
 			config.ExtractVideos = videoExtractStr == "true"
 		case strings.Contains(args[i], "video_platform="):
 			config.VideoPlatform = strings.TrimPrefix(args[i], "video_platform=")
+		case strings.Contains(args[i], "enable_js="):
+			enableJSStr := strings.TrimPrefix(args[i], "enable_js=")
+			config.EnableJS = enableJSStr == "true"
+		case strings.Contains(args[i], "js_timeout="):
+			if timeoutStr := strings.TrimPrefix(args[i], "js_timeout="); timeoutStr != "" {
+				if timeout, err := strconv.Atoi(timeoutStr); err == nil && timeout > 0 {
+					config.JSTimeout = timeout
+				}
+			}
+		case strings.Contains(args[i], "human_behavior="):
+			humanBehaviorStr := strings.TrimPrefix(args[i], "human_behavior=")
+			config.HumanBehavior = humanBehaviorStr == "true"
 		}
 	}
 

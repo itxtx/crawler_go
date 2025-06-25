@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/itxtx/crawler_go/config"
 	"github.com/itxtx/crawler_go/extractor"
@@ -129,7 +130,27 @@ func (cfg *Config) ProcessURL(rawCurrentURL, filter string) []job {
 	if cfg.CrawlerConfig.ExtractVideos {
 		// The printContent flag should be true since we want to print when ExtractVideos is enabled
 		// The printing is handled inside ExtractVideos function now, similar to ExtractContent
-		vids, _ := extractor.ExtractVideos(htmlBody, currentURL, cfg.CrawlerConfig, true)
+		var vids []extractor.VideoInfo
+		var err error
+
+		// Use JavaScript engine if enabled
+		if cfg.CrawlerConfig.EnableJS {
+			timeout := time.Duration(cfg.CrawlerConfig.JSTimeout) * time.Second
+			vids, err = extractor.ExtractVideosWithJavaScript(rawCurrentURL, currentURL, cfg.CrawlerConfig, timeout)
+			if err != nil {
+				fmt.Printf("JavaScript video extraction failed for %s, falling back to regular extraction: %v\n", rawCurrentURL, err)
+				// Fallback to regular extraction
+				vids, _ = extractor.ExtractVideos(htmlBody, currentURL, cfg.CrawlerConfig, true)
+			} else if len(vids) > 0 {
+				fmt.Printf("\nVideos found on %s using JavaScript extraction:\n", rawCurrentURL)
+				for i, video := range vids {
+					fmt.Printf("Video %d: %s (Platform: %s, Title: %s)\n", i+1, video.URL, video.Platform, video.Title)
+				}
+			}
+		} else {
+			// Regular video extraction
+			vids, _ = extractor.ExtractVideos(htmlBody, currentURL, cfg.CrawlerConfig, true)
+		}
 		_ = vids // Store videos for future use if needed
 	}
 

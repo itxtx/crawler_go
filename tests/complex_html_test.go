@@ -13,7 +13,7 @@ import (
 // with advanced video protection techniques
 func TestComplexVideoObfuscationHTML(t *testing.T) {
 	baseURL, _ := url.Parse("https://example.com")
-	
+
 	// The complete HTML content from the provided document
 	complexHTML := `<!DOCTYPE html>
 <html lang="en">
@@ -202,7 +202,7 @@ func TestComplexVideoObfuscationHTML(t *testing.T) {
 		}
 
 		t.Logf("Found %d videos with regex selectors", len(videos))
-		
+
 		// Should find the signed URL pattern
 		foundSecureURL := false
 		for _, video := range videos {
@@ -258,7 +258,7 @@ func TestComplexVideoObfuscationHTML(t *testing.T) {
 		}
 
 		t.Logf("Found %d videos in large HTML document", len(videos))
-		
+
 		// Should handle deduplication properly
 		urlSet := make(map[string]bool)
 		for _, video := range videos {
@@ -275,11 +275,11 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 	baseURL, _ := url.Parse("https://example.com")
 
 	testCases := []struct {
-		name          string
-		html          string
-		expectVideos  int
+		name           string
+		html           string
+		expectVideos   int
 		expectPlatform string
-		description   string
+		description    string
 	}{
 		{
 			name: "Canvas rendering with hidden video",
@@ -289,9 +289,9 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 					<canvas id="display-canvas"></canvas>
 				</div>
 			`,
-			expectVideos:  1,
+			expectVideos:   1,
 			expectPlatform: "html5",
-			description:   "Hidden video should still be detected",
+			description:    "Hidden video should still be detected",
 		},
 		{
 			name: "JavaScript-generated video URLs",
@@ -302,9 +302,9 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 				</script>
 				<div>Video URL in script: https://example.com/script-video.mp4</div>
 			`,
-			expectVideos:  2, // Our improved detector finds both URLs
+			expectVideos:   2, // Our improved detector finds both URLs
 			expectPlatform: "direct",
-			description:   "URLs in text should be detected",
+			description:    "URLs in text should be detected",
 		},
 		{
 			name: "Base64 encoded video references",
@@ -313,9 +313,9 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 					<!-- Base64: https://example.com/video.mp4 -->
 				</div>
 			`,
-			expectVideos:  1, // URL in comment is detected by direct URL extraction
+			expectVideos:   1, // URL in comment is detected by direct URL extraction
 			expectPlatform: "direct",
-			description:   "URL in comment detected despite Base64 obfuscation",
+			description:    "URL in comment detected despite Base64 obfuscation",
 		},
 		{
 			name: "Video.js player initialization",
@@ -325,9 +325,9 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 				</video>
 				<script src="https://vjs.zencdn.net/8.10.0/video.min.js"></script>
 			`,
-			expectVideos:  1,
+			expectVideos:   1,
 			expectPlatform: "html5",
-			description:   "Video.js sources should be detected",
+			description:    "Video.js sources should be detected",
 		},
 		{
 			name: "Multiple protection layers",
@@ -339,9 +339,9 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 				</div>
 				<iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" style="display:none;"></iframe>
 			`,
-			expectVideos:  1, // Our improved URL detection filters out overly complex signed URLs
+			expectVideos:   1,         // Our improved URL detection filters out overly complex signed URLs
 			expectPlatform: "youtube", // YouTube iframe should be detected
-			description:   "Multiple sources with different protection levels",
+			description:    "Multiple sources with different protection levels",
 		},
 		{
 			name: "Event-driven video loading",
@@ -357,16 +357,16 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 					}
 				</script>
 			`,
-			expectVideos:  1,
+			expectVideos:   1,
 			expectPlatform: "custom",
-			description:   "Data attributes should be detected",
+			description:    "Data attributes should be detected",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			extractor.SetLogLevel(extractor.LogLevelDebug)
-			
+
 			videos, err := extractor.ExtractVideos(tc.html, baseURL, nil, false)
 			if err != nil {
 				t.Fatalf("ExtractVideos failed for %s: %v", tc.description, err)
@@ -383,8 +383,8 @@ func TestVideoObfuscationTechniques(t *testing.T) {
 				found := false
 				for _, video := range videos {
 					// For event-driven loading, we might get 'direct' instead of 'custom' if URL is detected first
-					if video.Platform == tc.expectPlatform || 
-					   (tc.name == "Event-driven video loading" && video.Platform == "direct") {
+					if video.Platform == tc.expectPlatform ||
+						(tc.name == "Event-driven video loading" && video.Platform == "direct") {
 						found = true
 						break
 					}

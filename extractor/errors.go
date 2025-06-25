@@ -17,16 +17,17 @@ type ExtractionError struct {
 type ErrorType string
 
 const (
-	ErrorTypeMalformedURL     ErrorType = "malformed_url"
-	ErrorTypeMissingSrc       ErrorType = "missing_src"
-	ErrorTypeJSONLDParse      ErrorType = "jsonld_parse_error"
-	ErrorTypeHTMLParse        ErrorType = "html_parse_error"
-	ErrorTypeXPathParse       ErrorType = "xpath_parse_error"
-	ErrorTypeRegexParse       ErrorType = "regex_parse_error"
-	ErrorTypeInvalidSelector  ErrorType = "invalid_selector"
-	ErrorTypeNetworkError     ErrorType = "network_error"
-	ErrorTypeUnknownPlatform  ErrorType = "unknown_platform"
-	ErrorTypeEmptyContent     ErrorType = "empty_content"
+	ErrorTypeMalformedURL    ErrorType = "malformed_url"
+	ErrorTypeMissingSrc      ErrorType = "missing_src"
+	ErrorTypeJSONLDParse     ErrorType = "jsonld_parse_error"
+	ErrorTypeHTMLParse       ErrorType = "html_parse_error"
+	ErrorTypeXPathParse      ErrorType = "xpath_parse_error"
+	ErrorTypeRegexParse      ErrorType = "regex_parse_error"
+	ErrorTypeInvalidSelector ErrorType = "invalid_selector"
+	ErrorTypeNetworkError    ErrorType = "network_error"
+	ErrorTypeUnknownPlatform ErrorType = "unknown_platform"
+	ErrorTypeEmptyContent    ErrorType = "empty_content"
+	ErrorTypeJSEvaluation    ErrorType = "js_evaluation_error"
 )
 
 // Error implements the error interface
@@ -126,6 +127,16 @@ func NewRegexParseError(pattern string, err error) *ExtractionError {
 		ErrorTypeRegexParse,
 		"Failed to compile regex pattern",
 		pattern,
+		err,
+	)
+}
+
+// NewJSEvaluationError creates an error for JavaScript evaluation failures
+func NewJSEvaluationError(url string, err error) *ExtractionError {
+	return NewExtractionError(
+		ErrorTypeJSEvaluation,
+		"JavaScript evaluation failed",
+		url,
 		err,
 	)
 }

@@ -46,7 +46,7 @@ func TestExtractionErrorTypes(t *testing.T) {
 	t.Run("Error_Unwrap", func(t *testing.T) {
 		originalErr := errors.New("original error")
 		extractionErr := extractor.NewMalformedURLError("test", originalErr)
-		
+
 		if extractionErr.Unwrap() != originalErr {
 			t.Error("Unwrap should return the original error")
 		}
@@ -161,8 +161,13 @@ func TestSafeURLNormalize(t *testing.T) {
 		if result != "" {
 			t.Error("Expected empty result for invalid URL")
 		}
-		if err.Type != extractor.ErrorTypeMissingSrc {
-			t.Errorf("Expected %s error type, got %s", extractor.ErrorTypeMissingSrc, err.Type)
+		var extractionErr *extractor.ExtractionError
+		if errors.As(err, &extractionErr) {
+			if extractionErr.Type != extractor.ErrorTypeMissingSrc {
+				t.Errorf("Expected %s error type, got %s", extractor.ErrorTypeMissingSrc, extractionErr.Type)
+			}
+		} else {
+			t.Error("Expected ExtractionError type")
 		}
 	})
 }
@@ -208,15 +213,15 @@ func TestExtractVideosErrorHandling(t *testing.T) {
 				<body></body>
 			</html>
 		`
-		
+
 		// Set log level to capture errors during test
 		extractor.SetLogLevel(extractor.LogLevelDebug)
-		
+
 		videos, err := extractor.ExtractVideos(htmlWithInvalidJSON, baseURL, nil, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should handle invalid JSON-LD gracefully: %v", err)
 		}
-		
+
 		// Should not find the video from the invalid JSON-LD, but should not crash
 		t.Logf("Found %d videos despite invalid JSON-LD", len(videos))
 	})
@@ -235,12 +240,12 @@ func TestExtractVideosErrorHandling(t *testing.T) {
 				</body>
 			</html>
 		`
-		
+
 		videos, err := extractor.ExtractVideos(htmlWithMissingSrc, baseURL, nil, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should handle missing src gracefully: %v", err)
 		}
-		
+
 		// Should not find any videos due to missing src attributes
 		if len(videos) != 0 {
 			t.Errorf("Expected 0 videos with missing src, got %d", len(videos))
@@ -253,15 +258,15 @@ func TestExtractVideosErrorHandling(t *testing.T) {
 			Selectors:    []string{"invalid-xpath[[["},
 			SelectorType: "xpath",
 		}
-		
+
 		// Set log level to capture errors during test
 		extractor.SetLogLevel(extractor.LogLevelDebug)
-		
+
 		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should handle invalid XPath gracefully: %v", err)
 		}
-		
+
 		// Should still find the video from standard detection
 		if len(videos) == 0 {
 			t.Error("Should still find videos through standard detection")
@@ -274,15 +279,15 @@ func TestExtractVideosErrorHandling(t *testing.T) {
 			Selectors:    []string{"[invalid-regex(("},
 			SelectorType: "regex",
 		}
-		
+
 		// Set log level to capture errors during test
 		extractor.SetLogLevel(extractor.LogLevelDebug)
-		
+
 		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should handle invalid regex gracefully: %v", err)
 		}
-		
+
 		// Should still find videos through standard detection if any
 		t.Logf("Found %d videos despite invalid regex", len(videos))
 	})
@@ -295,12 +300,12 @@ func TestExtractVideosErrorHandling(t *testing.T) {
 			Selectors:    []string{"//video"},
 			SelectorType: "xpath",
 		}
-		
+
 		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should handle HTML parsing errors gracefully: %v", err)
 		}
-		
+
 		t.Logf("Found %d videos from invalid HTML", len(videos))
 	})
 }
@@ -321,7 +326,7 @@ func TestJSONLDErrorHandling(t *testing.T) {
 			expectVideos: 0,
 		},
 		{
-			name: "Whitespace-only JSON-LD script", 
+			name: "Whitespace-only JSON-LD script",
 			jsonContent: `
 				<script type="application/ld+json">   
 				
@@ -383,15 +388,15 @@ func TestJSONLDErrorHandling(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			html := fmt.Sprintf(`<html><head>%s</head><body></body></html>`, tc.jsonContent)
-			
+
 			// Set log level to see debug output
 			extractor.SetLogLevel(extractor.LogLevelDebug)
-			
+
 			videos, err := extractor.ExtractVideos(html, baseURL, nil, false)
 			if err != nil {
 				t.Fatalf("ExtractVideos failed: %v", err)
 			}
-			
+
 			if len(videos) != tc.expectVideos {
 				t.Errorf("Expected %d videos, got %d", tc.expectVideos, len(videos))
 			}
@@ -399,7 +404,7 @@ func TestJSONLDErrorHandling(t *testing.T) {
 	}
 }
 
-// Test logging functionality 
+// Test logging functionality
 func TestLogging(t *testing.T) {
 	t.Run("SetLogLevel", func(t *testing.T) {
 		// Test that we can set different log levels without errors
@@ -423,7 +428,7 @@ func TestLogging(t *testing.T) {
 		extractor.LogWarn("Test warning: %s", "warning message")
 		extractor.LogInfo("Test info: %s", "info message")
 		extractor.LogDebug("Test debug: %s", "debug message")
-		
+
 		extractor.LogExtractionWarn("Test extraction warning: %s", "warning")
 		extractor.LogExtractionInfo("Test extraction info: %s", "info")
 		extractor.LogExtractionDebug("Test extraction debug: %s", "debug")
@@ -455,34 +460,34 @@ func TestNormalizeURLEdgeCases(t *testing.T) {
 			name: "Meta tag with empty content",
 			html: `cmeta property="og:video" content=""e`,
 		},
-        {
-            name: "Canvas Rendering Technique",
-            html: `cdiv id="canvas-container"ecvideo style="display:none;" src="https://example.com/video.mp4"ec/videoec/dive`,
-        },
-        {
-            name: "WASM Decryption Technique",
-            html: `cdiv id="wasm-container"ecdiv class="obfuscated-text"ec!-- wasmModule.decrypt(encryptedUrl).then(...) --ec/divec/dive`,
-        },
-        {
-            name: "Event-Based Loading Technique",
-            html: `cdiv id="event-based-container"ecvideo onmouseenter="..."ec/videoec/dive`,
-        },
-        {
-            name: "Signed URL Protection Technique",
-            html: `cdiv id="signed-url-container"ecvideo src="https://secure.example.com/video.mp4?Policy=..."ec/videoec/dive`,
-        },
+		{
+			name: "Canvas Rendering Technique",
+			html: `cdiv id="canvas-container"ecvideo style="display:none;" src="https://example.com/video.mp4"ec/videoec/dive`,
+		},
+		{
+			name: "WASM Decryption Technique",
+			html: `cdiv id="wasm-container"ecdiv class="obfuscated-text"ec!-- wasmModule.decrypt(encryptedUrl).then(...) --ec/divec/dive`,
+		},
+		{
+			name: "Event-Based Loading Technique",
+			html: `cdiv id="event-based-container"ecvideo onmouseenter="..."ec/videoec/dive`,
+		},
+		{
+			name: "Signed URL Protection Technique",
+			html: `cdiv id="signed-url-container"ecvideo src="https://secure.example.com/video.mp4?Policy=..."ec/videoec/dive`,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Set debug logging to see warnings
 			extractor.SetLogLevel(extractor.LogLevelDebug)
-			
+
 			videos, err := extractor.ExtractVideos(tc.html, baseURL, nil, false)
 			if err != nil {
 				t.Fatalf("ExtractVideos should handle edge cases gracefully: %v", err)
 			}
-			
+
 			// Check expected behavior based on known video obfuscation techniques
 			// This is an example expectation and should be tailored
 
@@ -490,14 +495,14 @@ func TestNormalizeURLEdgeCases(t *testing.T) {
 			if tc.name == "Canvas Rendering Technique" && len(videos) != 1 {
 				t.Errorf("Expected 1 video, got %d", len(videos))
 			}
-			
+
 			// General catch-all for empty content cases
-			if (tc.name == "Video with empty src" || tc.name == "Source with empty src" || 
+			if (tc.name == "Video with empty src" || tc.name == "Source with empty src" ||
 				tc.name == "Iframe with empty src" || tc.name == "Meta tag with empty content" ||
 				tc.name == "WASM Decryption Technique" || tc.name == "Event-Based Loading Technique") && len(videos) != 0 {
 				t.Errorf("Expected no videos to be found for %s, got %d", tc.name, len(videos))
 			}
-			
+
 			// Special case for signed URL protection technique - it has a valid URL
 			if tc.name == "Signed URL Protection Technique" && len(videos) != 1 {
 				t.Errorf("Expected 1 video for signed URL technique, got %d", len(videos))

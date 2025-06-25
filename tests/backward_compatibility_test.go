@@ -131,34 +131,34 @@ func TestVideoExtractionGuardedByFlag(t *testing.T) {
 	t.Run("Video extraction logic is properly guarded", func(t *testing.T) {
 		// This test verifies that the video extraction code paths are properly
 		// guarded by the ExtractVideos flag in the crawling logic
-		
+
 		baseURL, _ := url.Parse("https://example.com")
-		
+
 		// Config with ExtractVideos disabled
 		cfgDisabled := &config.CrawlerConfig{
 			ExtractVideos: false,
 		}
-		
+
 		// Config with ExtractVideos enabled
 		cfgEnabled := &config.CrawlerConfig{
 			ExtractVideos: true,
 		}
-		
+
 		htmlWithVideos := `<html><body><video src="test.mp4"></video></body></html>`
-		
+
 		// When disabled, video extraction should not occur during normal crawling
 		// But the function should still work when called directly
 		videosDisabled, err := extractor.ExtractVideos(htmlWithVideos, baseURL, cfgDisabled, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should work regardless of flag: %v", err)
 		}
-		
+
 		// When enabled, video extraction should work normally
 		videosEnabled, err := extractor.ExtractVideos(htmlWithVideos, baseURL, cfgEnabled, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos should work when enabled: %v", err)
 		}
-		
+
 		// Both should find the same videos (the flag doesn't affect the extraction logic itself)
 		if len(videosDisabled) != len(videosEnabled) {
 			t.Errorf("Video extraction results should be the same regardless of flag when function is called directly")
@@ -201,17 +201,17 @@ func TestExistingFunctionsUntouched(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ExtractLinksAndDescriptions failed: %v", err)
 		}
-		
+
 		if len(links) != 2 {
 			t.Errorf("Expected 2 links, got %d", len(links))
 		}
-		
+
 		// Test with filter
 		filteredLinks, err := extractor.ExtractLinksAndDescriptions(testHTML, baseURL, "link1")
 		if err != nil {
 			t.Fatalf("ExtractLinksAndDescriptions with filter failed: %v", err)
 		}
-		
+
 		if len(filteredLinks) != 1 {
 			t.Errorf("Expected 1 filtered link, got %d", len(filteredLinks))
 		}
@@ -221,8 +221,7 @@ func TestExistingFunctionsUntouched(t *testing.T) {
 		// Test that the existing formatOutput pattern is preserved
 		// This is tested indirectly through the ExtractContent calls above
 		// but we verify the behavior is consistent
-		
-		
+
 		// These calls should work as they did before (internal function)
 		// We test this through the public API that uses formatOutput
 		extractor.ExtractContent(testHTML, "a", "css", "text", false)

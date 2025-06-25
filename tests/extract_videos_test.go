@@ -116,7 +116,7 @@ func TestExtractVideos(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-		videos, err := extractor.ExtractVideos(tc.html, baseURL, nil, false)
+			videos, err := extractor.ExtractVideos(tc.html, baseURL, nil, false)
 			if err != nil {
 				t.Fatalf("ExtractVideos failed: %v", err)
 			}
@@ -160,8 +160,9 @@ func TestExtractVideosEdgeCases(t *testing.T) {
 			t.Fatalf("ExtractVideos failed: %v", err)
 		}
 		// Should handle gracefully even with malformed HTML
-		if len(videos) < 0 {
-			t.Error("Should handle malformed HTML gracefully")
+		// (Note: This is just checking that we get a valid slice back)
+		if videos == nil {
+			t.Error("Should handle malformed HTML gracefully and return non-nil slice")
 		}
 	})
 
@@ -200,7 +201,7 @@ func TestExtractVideosWithCustomSelectors(t *testing.T) {
 			SelectorType: "css",
 		}
 
-videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
+		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos failed: %v", err)
 		}
@@ -248,7 +249,7 @@ videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 			SelectorType: "xpath",
 		}
 
-videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
+		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos failed: %v", err)
 		}
@@ -277,7 +278,7 @@ videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 			SelectorType: "regex",
 		}
 
-videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
+		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos failed: %v", err)
 		}
@@ -312,7 +313,7 @@ videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 			SelectorType: "css", // Standard CSS selector type
 		}
 
-videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
+		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos failed: %v", err)
 		}
@@ -348,7 +349,7 @@ videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 			SelectorType: "css", // Standard CSS selector type
 		}
 
-videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
+		videos, err := extractor.ExtractVideos(html, baseURL, cfg, false)
 		if err != nil {
 			t.Fatalf("ExtractVideos failed: %v", err)
 		}

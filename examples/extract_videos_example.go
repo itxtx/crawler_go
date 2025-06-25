@@ -92,7 +92,7 @@ func main() {
 
 	// Display results
 	fmt.Printf("Found %d videos:\n\n", len(videos))
-	
+
 	for i, video := range videos {
 		fmt.Printf("Video %d:\n", i+1)
 		fmt.Printf("  URL: %s\n", video.URL)
