@@ -126,6 +126,13 @@ func (cfg *Config) ProcessURL(rawCurrentURL, filter string) []job {
 		extractor.ExtractContent(htmlBody, strings.Join(cfg.CrawlerConfig.Selectors, ","), cfg.CrawlerConfig.SelectorType, cfg.CrawlerConfig.OutputFormat, true)
 	}
 
+	if cfg.CrawlerConfig.ExtractVideos {
+		// The printContent flag should be true since we want to print when ExtractVideos is enabled
+		// The printing is handled inside ExtractVideos function now, similar to ExtractContent
+		vids, _ := extractor.ExtractVideos(htmlBody, currentURL, cfg.CrawlerConfig, true)
+		_ = vids // Store videos for future use if needed
+	}
+
 	urls, err := getURLsFromHTML(htmlBody, currentURL.String())
 	if err != nil {
 		fmt.Println("Error extracting URLs:", err)
@@ -136,5 +143,10 @@ func (cfg *Config) ProcessURL(rawCurrentURL, filter string) []job {
 	for _, u := range urls {
 		newJobs = append(newJobs, job{url: u, filter: filter})
 	}
+
+	if len(newJobs) > cfg.MaxPages-len(cfg.Pages) {
+		newJobs = newJobs[:cfg.MaxPages-len(cfg.Pages)]
+	}
+
 	return newJobs
 }

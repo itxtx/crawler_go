@@ -16,6 +16,9 @@ type CrawlerConfig struct {
 	SelectorType   string
 	OutputFormat   string
 	Filter         string
+	ExtractVideos  bool
+	VideoFormat    string // text|json|csv
+	VideoPlatform  string // optional filter youtube,vimeo,...
 }
 
 func ParseArgs(args []string) (*CrawlerConfig, error) {
@@ -46,6 +49,9 @@ func ParseArgs(args []string) (*CrawlerConfig, error) {
 		SelectorType:   "css",  // default
 		OutputFormat:   "text", // default
 		Filter:         "",     // no filter by default
+		ExtractVideos:  false,  // default
+		VideoFormat:    "text", // default
+		VideoPlatform:  "",     // default
 	}
 
 	for i := 4; i < len(args); i++ {
@@ -54,10 +60,18 @@ func ParseArgs(args []string) (*CrawlerConfig, error) {
 			config.Selectors = strings.Split(strings.TrimPrefix(args[i], "selectors="), ",")
 		case strings.Contains(args[i], "selector_type="):
 			config.SelectorType = strings.TrimPrefix(args[i], "selector_type=")
+		case strings.Contains(args[i], "video_output_format="):
+			// Handle video_output_format before output_format to prevent conflicts
+			config.VideoFormat = strings.TrimPrefix(args[i], "video_output_format=")
 		case strings.Contains(args[i], "output_format="):
 			config.OutputFormat = strings.TrimPrefix(args[i], "output_format=")
 		case strings.Contains(args[i], "filter="):
 			config.Filter = strings.TrimPrefix(args[i], "filter=")
+		case strings.Contains(args[i], "video_extract="):
+			videoExtractStr := strings.TrimPrefix(args[i], "video_extract=")
+			config.ExtractVideos = videoExtractStr == "true"
+		case strings.Contains(args[i], "video_platform="):
+			config.VideoPlatform = strings.TrimPrefix(args[i], "video_platform=")
 		}
 	}
 
