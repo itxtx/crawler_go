@@ -275,17 +275,26 @@ func extractIframeEmbeds(doc *goquery.Document, base *url.URL, videoMap map[stri
 
 // extractDirectVideoURLs extracts direct video URLs from HTML content using regex
 func extractDirectVideoURLs(htmlContent string, base *url.URL, videoMap map[string]VideoInfo) {
-	// Regex for direct video URLs
-	videoURLRegex := regexp.MustCompile(`(?i)https?://[^"'\s]+\.(mp4|webm|avi|mov|mkv)`)
+	// Regex for direct video URLs, but be more selective to avoid false positives
+	videoURLRegex := regexp.MustCompile(`(?i)https?://[^"'\s<>]+\.(mp4|webm|avi|mov|mkv|flv|wmv|m4v)(?:[?#][^\s"'<>]*)?`)
 	matches := videoURLRegex.FindAllString(htmlContent, -1)
 
 	for _, match := range matches {
+		// Skip URLs that are clearly Base64 encoded data or other non-direct URLs
+		if isLikelyEncodedOrObfuscated(match) {
+			LogExtractionDebug("Skipping potentially encoded/obfuscated URL: %s", match)
+			continue
+		}
+		
 		absURL := normalizeURL(match, base)
-		if _, exists := videoMap[absURL]; !exists {
-			videoMap[absURL] = VideoInfo{
-				URL:      absURL,
-				Platform: "direct",
-				Title:    extractTitleFromURL(absURL),
+		if absURL != "" {
+			if _, exists := videoMap[absURL]; !exists {
+				videoMap[absURL] = VideoInfo{
+					URL:      absURL,
+					Platform: "direct",
+					Title:    extractTitleFromURL(absURL),
+				}
+				LogExtractionDebug("Found direct video URL: %s", absURL)
 			}
 		}
 	}
@@ -399,15 +408,34 @@ func extractCustomDataAttributes(doc *goquery.Document, base *url.URL, videoMap 
 		"data-video-url",
 		"data-src",
 		"data-video",
+		"data-lazy",
+		"data-lazy-src",
+		"data-source",
 	}
 
+	// Check standard data attributes
 	for _, attr := range dataAttributes {
 		doc.Find(fmt.Sprintf("[%s]", attr)).Each(func(i int, element *goquery.Selection) {
-			if src, exists := element.Attr(attr); exists {
-				addVideoToMap(src, "custom", base, element, doc, videoMap)
+			if src, exists := element.Attr(attr); exists && src != "" {
+				// Skip Base64 encoded data URIs unless they decode to valid URLs
+				if !isLikelyEncodedOrObfuscated(src) && isVideoURL(src) {
+					addVideoToMap(src, "custom", base, element, doc, videoMap)
+				}
 			}
 		})
 	}
+
+	// Also check for any element with onclick handlers that might load videos dynamically
+	doc.Find("[onclick]").Each(func(i int, element *goquery.Selection) {
+		// Look for data-src or similar attributes on clickable elements
+		for _, attr := range []string{"data-src", "data-video-url", "data-lazy"} {
+			if src, exists := element.Attr(attr); exists && src != "" {
+				if !isLikelyEncodedOrObfuscated(src) && isVideoURL(src) {
+					addVideoToMap(src, "custom", base, element, doc, videoMap)
+				}
+			}
+		}
+	})
 }
 
 // addVideoToMap adds a video to the map with metadata extraction
@@ -678,6 +706,46 @@ func isVideoURL(rawURL string) bool {
 		if strings.Contains(lowerURL, host) {
 			return true
 		}
+	}
+	
+	return false
+}
+
+// isLikelyEncodedOrObfuscated checks if a URL appears to be encoded or obfuscated
+func isLikelyEncodedOrObfuscated(rawURL string) bool {
+	// Check for Base64-like patterns (long strings of alphanumeric characters with = padding)
+	if len(rawURL) > 50 && strings.Contains(rawURL, "=") {
+		// Count alphanumeric characters vs total length
+		alphanumCount := 0
+		for _, char := range rawURL {
+			if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') || char == '+' || char == '/' || char == '=' {
+				alphanumCount++
+			}
+		}
+		// If more than 80% of characters are Base64-like, it's likely encoded
+		if float64(alphanumCount)/float64(len(rawURL)) > 0.8 {
+			return true
+		}
+	}
+	
+	// Check for extremely long path segments (potential obfuscation)
+	if parsed, err := url.Parse(rawURL); err == nil {
+		pathSegments := strings.Split(parsed.Path, "/")
+		for _, segment := range pathSegments {
+			if len(segment) > 100 { // Very long path segment
+				return true
+			}
+		}
+	}
+	
+	// Check for data URIs
+	if strings.HasPrefix(rawURL, "data:") {
+		return true
+	}
+	
+	// Check for blob URLs
+	if strings.HasPrefix(rawURL, "blob:") {
+		return true
 	}
 	
 	return false
