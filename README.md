@@ -2,10 +2,10 @@
 
 A powerful, enterprise-grade web crawling and video extraction tool built in Go. Crawler-Go specializes in extracting video content from complex web pages that use JavaScript, dynamic loading, obfuscation techniques, and modern web technologies.
 
-## 🚀 Features
+## Features
 
 ### Core Capabilities
-- **Advanced Video Detection**: Extracts videos from HTML5 `<video>` tags, embedded players, and custom implementations
+- **Video Detection**: Extracts videos from HTML5 `<video>` tags, embedded players, and custom implementations
 - **Multi-Platform Support**: Handles YouTube, Vimeo, custom players, and direct video files
 - **Flexible Output Formats**: Supports JSON, CSV, and plain text output
 
@@ -27,7 +27,7 @@ A powerful, enterprise-grade web crawling and video extraction tool built in Go.
 - **Fallback Mechanisms**: Falls back to static extraction if JavaScript fails
 - **Comprehensive Logging**: Detailed logging for debugging and monitoring
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 - **Go 1.21+**: [Download Go](https://golang.org/doc/install)
